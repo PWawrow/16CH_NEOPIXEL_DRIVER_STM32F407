@@ -1,0 +1,5 @@
+../Core/Src/nonvmem.c:19:6:purgeSaved	24	static
+../Core/Src/nonvmem.c:26:6:save2DArr	32	static
+../Core/Src/nonvmem.c:37:6:read2DArr	32	static
+../Core/Src/nonvmem.c:48:6:saveMem	16	static
+../Core/Src/nonvmem.c:84:6:readMem	16	static

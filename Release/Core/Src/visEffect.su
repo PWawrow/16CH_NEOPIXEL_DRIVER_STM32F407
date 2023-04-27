@@ -1,0 +1,4 @@
+../Core/Src/visEffect.c:70:6:visDots	32	static
+../Core/Src/visEffect.c:104:6:visHandle2	0	static
+../Core/Src/visEffect.c:119:6:visInit	0	static
+../Core/Src/visEffect.c:137:6:visHandle	8	static

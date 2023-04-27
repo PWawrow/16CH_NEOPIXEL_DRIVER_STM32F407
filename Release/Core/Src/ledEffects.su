@@ -1,0 +1,7 @@
+../Core/Src/ledEffects.c:69:6:setAllBlack	0	static
+../Core/Src/ledEffects.c:75:6:setBlack	0	static
+../Core/Src/ledEffects.c:102:10:Wheel	0	static
+../Core/Src/ledEffects.c:80:6:calcRainbow	24	static
+../Core/Src/ledEffects.c:47:6:handleEffects	16	static
+../Core/Src/ledEffects.c:21:6:effectsLoop	8	static
+../Core/Src/ledEffects.c:114:6:visRainbow	24	static

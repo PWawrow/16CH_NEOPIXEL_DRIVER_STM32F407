@@ -1,0 +1,7 @@
+ledEffects.c:69:6:setAllBlack	3
+ledEffects.c:75:6:setBlack	2
+ledEffects.c:102:10:Wheel	3
+ledEffects.c:80:6:calcRainbow	2
+ledEffects.c:47:6:handleEffects	5
+ledEffects.c:21:6:effectsLoop	3
+ledEffects.c:114:6:visRainbow	3
