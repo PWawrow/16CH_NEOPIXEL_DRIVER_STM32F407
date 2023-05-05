@@ -1,7 +1,7 @@
 ../Core/Src/ledEffects.c:21:6:effectsLoop	16	static
-../Core/Src/ledEffects.c:47:6:handleEffects	24	static
-../Core/Src/ledEffects.c:69:6:setAllBlack	16	static
-../Core/Src/ledEffects.c:75:6:setBlack	24	static
-../Core/Src/ledEffects.c:80:6:calcRainbow	32	static
-../Core/Src/ledEffects.c:102:10:Wheel	16	static
-../Core/Src/ledEffects.c:114:6:visRainbow	32	static
+../Core/Src/ledEffects.c:50:6:handleEffects	24	static
+../Core/Src/ledEffects.c:72:6:setAllBlack	16	static
+../Core/Src/ledEffects.c:78:6:setBlack	24	static
+../Core/Src/ledEffects.c:83:6:calcRainbow	32	static
+../Core/Src/ledEffects.c:105:10:Wheel	16	static
+../Core/Src/ledEffects.c:117:6:visRainbow	32	static

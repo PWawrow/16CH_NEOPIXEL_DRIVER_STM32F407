@@ -18,11 +18,12 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "usb_device.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 //#include "visEffect.h"
-
+#include "usbd_cdc_if.h"
 #include "ws2812b.h"
 #include "nonvmem.h"
 #include "irDecoder.h"
@@ -58,26 +59,30 @@ DMA_HandleTypeDef hdma_usart2_rx;
 #define UART_BUFF_SIZE 50
  uint8_t UART_DmaBuffer[UART_BUFF_SIZE];
  uint8_t UART_CpltBuffer[UART_BUFF_SIZE];
- const uint8_t UART_GET_IR_SENTENCE[6] = {'G', 'E', 'T', '_', 'I','R'};
- const uint8_t UART_GET_IR_RESPONSE[] = {'\n', 'W','A','I','T','I','N','G', '_', 'F','O', 'R', '_', 'I', 'R', '\n'};
- const uint8_t UART_ROUTINES_READ_SENTENCE[13] =
+  uint8_t UART_GET_IR_SENTENCE[6] = {'G', 'E', 'T', '_', 'I','R'};
+  uint8_t UART_GET_IR_RESPONSE[] = {'\n', 'W','A','I','T','I','N','G', '_', 'F','O', 'R', '_', 'I', 'R', '\n'};
+  uint8_t UART_ROUTINES_READ_SENTENCE[13] =
  	 {'R', 'O', 'U', 'T', 'I', 'N', 'E', 'S', '_', 'R', 'E', 'A', 'D'};
- const uint8_t UART_ROUTINES_WRITE_SENTENCE[14] =
+  uint8_t UART_ROUTINES_WRITE_SENTENCE[14] =
   	 {'R', 'O', 'U', 'T', 'I', 'N', 'E', 'S', '_', 'W', 'R', 'I', 'T', 'E'};
- const uint8_t UART_ROUTINES_WRITE_RESPONSE[] = {'\n', 'W','A','I','T','I','N','G'};
- const uint8_t UART_ROUTINES_SAVE_SENTENCE[11] =
+  uint8_t UART_ROUTINES_WRITE_RESPONSE[] = {'\n', 'W','A','I','T','I','N','G'};
+  uint8_t UART_ROUTINES_SAVE_SENTENCE[11] =
    	 {'M', 'E', 'M', 'O', 'R', 'Y', '_', 'S', 'A', 'V', 'E'};
- const uint8_t UART_ROUTINES_PURGE_SAVED_SENTENCE[9] =
+  uint8_t UART_ROUTINES_PURGE_SAVED_SENTENCE[9] =
    	 {'P', 'U', 'R', 'G', 'E', '_', 'M', 'E', 'M'};
- const uint8_t UART_RESPONSE_OK[] = {'\n', 'o', 'k'};
- const uint8_t UART_RESPONSE_END[] = {'\n','o', 'k', '_', 'e', 'n','d'};
+  uint8_t UART_SET_TIME[] = {'S', 'E', 'T', '_', 'T', 'I', 'M', 'E'};
+  uint8_t *UART_SET_TIME_RESPONSE = "Example: - For date&time Thursday, December 25, 2014 22:05:12, you have to use string below: 25.12.14.4;22:05:12";
 
- const uint8_t UART_SENTENCE_TAIL_BYTES = 2;
- const uint8_t UART_SENTENCE_HEAD_BYTES = 3;
+  uint8_t UART_RESPONSE_OK[] = {'\n', 'o', 'k'};
+  uint8_t UART_RESPONSE_END[] = {'\n','o', 'k', '_', 'e', 'n','d'};
+
+  uint8_t UART_SENTENCE_TAIL_BYTES = 2;
+  uint8_t UART_SENTENCE_HEAD_BYTES = 3;
 volatile uint16_t UART_BytesReceived = 0;
 
 uint8_t GET_IR_FLAG = 0;
 uint8_t ROUTINES_WRITE_FLAG = 0;
+uint8_t SET_TIME_FLAG = 0;
 // Saving Variables
 uint8_t SAVING_IR_POS = 0, SAVING_TIME_POS = 0;
 
@@ -92,22 +97,38 @@ static void MX_TIM1_Init(void);
 static void MX_TIM3_Init(void);
 static void MX_USART2_UART_Init(void);
 /* USER CODE BEGIN PFP */
+
+uint8_t USB_RX_BUFF[64];
+uint8_t USB_RX_BYTES_RECEIVED = 0;
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+  if( ACTIVE_EFFECT_NB == 0)
+  {
+	  ACTIVE_EFFECT_TYPE = 1;
+	  ACTIVE_EFFECT_NB = 1;
+  }else
+  {
+	  ACTIVE_EFFECT_TYPE = 0;
+	  ACTIVE_EFFECT_NB = 0;
+  }
+}
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 {
 	irIRQ();
 }
-void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t size){
-
-		if(huart->Instance == USART2)
-		{
-		//		HAL_UART_Transmit(&huart1, UART1_CpltBuffer, sizeof(UART1_CpltBuffer), 100);
-			UART_BytesReceived = size;
-			memcpy(UART_CpltBuffer, UART_DmaBuffer, UART_BUFF_SIZE);
-			HAL_UARTEx_ReceiveToIdle_DMA(&huart2, (uint8_t *) UART_DmaBuffer, UART_BUFF_SIZE);
-			__HAL_DMA_DISABLE_IT(&hdma_usart2_rx, DMA_IT_HT);
-		}
-
-}
+//void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t size){
+//
+//		if(huart->Instance == USART2)
+//		{
+//		//		HAL_UART_Transmit(&huart1, UART1_CpltBuffer, sizeof(UART1_CpltBuffer), 100);
+//			UART_BytesReceived = size;
+//			memcpy(UART_CpltBuffer, UART_DmaBuffer, UART_BUFF_SIZE);
+//			HAL_UARTEx_ReceiveToIdle_DMA(&huart2, (uint8_t *) UART_DmaBuffer, UART_BUFF_SIZE);
+//			__HAL_DMA_DISABLE_IT(&hdma_usart2_rx, DMA_IT_HT);
+//		}
+//
+//}
 void SendRoutinesOverUart()
 {
 	HAL_UART_Transmit(&huart2, (uint8_t *)"\nIR:\n", 5, 100);
@@ -148,147 +169,300 @@ void SendRoutinesOverUart()
 }
 void UartCheckReceived()
 {
-	if(UART_BytesReceived > 0)
+	if(USB_RX_BYTES_RECEIVED > 0)
 	{
 		if(ROUTINES_WRITE_FLAG == 1)
 		{
-			if(UART_BytesReceived >= 3 && UART_CpltBuffer[0] == 'E' && UART_CpltBuffer[1] == 'N' && UART_CpltBuffer[2] == 'D' )
+			if(USB_RX_BYTES_RECEIVED >= 3 && USB_RX_BUFF[0] == 'E' && USB_RX_BUFF[1] == 'N' && USB_RX_BUFF[2] == 'D' )
 			{
-				HAL_UART_Transmit(&huart2, UART_RESPONSE_END, sizeof(UART_RESPONSE_END), 100);
+				CDC_Transmit_FS(UART_RESPONSE_END, sizeof(UART_RESPONSE_END));
 				ROUTINES_WRITE_FLAG = 0;
 				SAVING_IR_POS = 0;
 				SAVING_TIME_POS = 0;
 
-			}else if(UART_BytesReceived >= 14 && UART_CpltBuffer[0] == 'S' && UART_CpltBuffer[1] == 'V' && UART_CpltBuffer[2] == '+'){
+			}else if(USB_RX_BYTES_RECEIVED >= 14 && USB_RX_BUFF[0] == 'S' && USB_RX_BUFF[1] == 'V' && USB_RX_BUFF[2] == '+'){
 
-				if(UART_BytesReceived >= 15 && UART_CpltBuffer[3] == 'I' && UART_CpltBuffer[4] == 'R')
+				if(USB_RX_BYTES_RECEIVED >= 15 && USB_RX_BUFF[3] == 'I' && USB_RX_BUFF[4] == 'R')
 				{
 					if(SAVING_IR_POS < MAX_IR_CODES)
 					{
 						//IR ADDR
-						IR_CODES_FLAGS[SAVING_IR_POS][0] = UART_CpltBuffer[5];
+						IR_CODES_FLAGS[SAVING_IR_POS][0] = USB_RX_BUFF[5];
 						//IR COMMAND
-						IR_CODES_FLAGS[SAVING_IR_POS][1] = UART_CpltBuffer[6];
+						IR_CODES_FLAGS[SAVING_IR_POS][1] = USB_RX_BUFF[6];
 						//ACTIVE STRIPS
-						IR_CODES_MACROS[SAVING_IR_POS][0] = UART_CpltBuffer[8];
-						IR_CODES_MACROS[SAVING_IR_POS][1] = UART_CpltBuffer[9];
+						IR_CODES_MACROS[SAVING_IR_POS][0] = USB_RX_BUFF[8];
+						IR_CODES_MACROS[SAVING_IR_POS][1] = USB_RX_BUFF[9];
 						//EFFECT
-						IR_CODES_MACROS[SAVING_IR_POS][2] = UART_CpltBuffer[11];
-						IR_CODES_MACROS[SAVING_IR_POS][3] = UART_CpltBuffer[12];
-						IR_CODES_MACROS[SAVING_IR_POS][4] = UART_CpltBuffer[13];
-						IR_CODES_MACROS[SAVING_IR_POS][5] = UART_CpltBuffer[14];
+						IR_CODES_MACROS[SAVING_IR_POS][2] = USB_RX_BUFF[11];
+						IR_CODES_MACROS[SAVING_IR_POS][3] = USB_RX_BUFF[12];
+						IR_CODES_MACROS[SAVING_IR_POS][4] = USB_RX_BUFF[13];
+						IR_CODES_MACROS[SAVING_IR_POS][5] = USB_RX_BUFF[14];
 
 						SAVING_IR_POS++;
-						HAL_UART_Transmit(&huart2, UART_RESPONSE_OK, sizeof(UART_RESPONSE_OK), 100);
+						CDC_Transmit_FS(UART_RESPONSE_OK, sizeof(UART_RESPONSE_OK));
 					}
-				} else if(UART_CpltBuffer[3] == 'E' && UART_CpltBuffer[4] == 'L')
+				} else if(USB_RX_BUFF[3] == 'E' && USB_RX_BUFF[4] == 'L')
 				{
-					if(UART_CpltBuffer[5] < MAX_ELE_INPUTS)
+					if(USB_RX_BUFF[5] < MAX_ELE_INPUTS)
 					{
 						//ACTIVE STRIPS
-						ELE_INPUT_MACROS[UART_CpltBuffer[5]][0] = UART_CpltBuffer[7];
-						ELE_INPUT_MACROS[UART_CpltBuffer[5]][1] = UART_CpltBuffer[8];
+						ELE_INPUT_MACROS[USB_RX_BUFF[5]][0] = USB_RX_BUFF[7];
+						ELE_INPUT_MACROS[USB_RX_BUFF[5]][1] = USB_RX_BUFF[8];
 						//EFFECT
-						ELE_INPUT_MACROS[UART_CpltBuffer[5]][2] = UART_CpltBuffer[10];
-						ELE_INPUT_MACROS[UART_CpltBuffer[5]][3] = UART_CpltBuffer[11];
-						ELE_INPUT_MACROS[UART_CpltBuffer[5]][4] = UART_CpltBuffer[12];
-						ELE_INPUT_MACROS[UART_CpltBuffer[5]][5] = UART_CpltBuffer[13];
-						HAL_UART_Transmit(&huart2, UART_RESPONSE_OK, sizeof(UART_RESPONSE_OK), 100);
+						ELE_INPUT_MACROS[USB_RX_BUFF[5]][2] = USB_RX_BUFF[10];
+						ELE_INPUT_MACROS[USB_RX_BUFF[5]][3] = USB_RX_BUFF[11];
+						ELE_INPUT_MACROS[USB_RX_BUFF[5]][4] = USB_RX_BUFF[12];
+						ELE_INPUT_MACROS[USB_RX_BUFF[5]][5] = USB_RX_BUFF[13];
+						CDC_Transmit_FS(UART_RESPONSE_OK, sizeof(UART_RESPONSE_OK));
 					}
-				} else if(UART_BytesReceived >= 17 && UART_CpltBuffer[3] == 'T' && UART_CpltBuffer[4] == 'M')
+				} else if(USB_RX_BYTES_RECEIVED >= 17 && USB_RX_BUFF[3] == 'T' && USB_RX_BUFF[4] == 'M')
 				{
 					if(SAVING_TIME_POS < MAX_TIME_MACROS)
 					{
 						//START TIME
-						TIME_FLAGS[SAVING_TIME_POS][0] = UART_CpltBuffer[5];
-						TIME_FLAGS[SAVING_TIME_POS][1] = UART_CpltBuffer[6];
+						TIME_FLAGS[SAVING_TIME_POS][0] = USB_RX_BUFF[5];
+						TIME_FLAGS[SAVING_TIME_POS][1] = USB_RX_BUFF[6];
 						//FOR TIME (TWO 8BITS = 1 16BIT)
-						TIME_FLAGS[SAVING_TIME_POS][2] = UART_CpltBuffer[7];
-						TIME_FLAGS[SAVING_TIME_POS][3] = UART_CpltBuffer[8];
+						TIME_FLAGS[SAVING_TIME_POS][2] = USB_RX_BUFF[7];
+						TIME_FLAGS[SAVING_TIME_POS][3] = USB_RX_BUFF[8];
 						//ACTIVE STRIPS
-						TIME_MACROS[SAVING_TIME_POS][0] = UART_CpltBuffer[10];
-						TIME_MACROS[SAVING_TIME_POS][1] = UART_CpltBuffer[11];
+						TIME_MACROS[SAVING_TIME_POS][0] = USB_RX_BUFF[10];
+						TIME_MACROS[SAVING_TIME_POS][1] = USB_RX_BUFF[11];
 						//EFFECT
-						TIME_MACROS[SAVING_TIME_POS][0] = UART_CpltBuffer[13];
-						TIME_MACROS[SAVING_TIME_POS][1] = UART_CpltBuffer[13];
-						TIME_MACROS[SAVING_TIME_POS][2] = UART_CpltBuffer[13];
-						TIME_MACROS[SAVING_TIME_POS][3] = UART_CpltBuffer[13];
+						TIME_MACROS[SAVING_TIME_POS][0] = USB_RX_BUFF[13];
+						TIME_MACROS[SAVING_TIME_POS][1] = USB_RX_BUFF[13];
+						TIME_MACROS[SAVING_TIME_POS][2] = USB_RX_BUFF[13];
+						TIME_MACROS[SAVING_TIME_POS][3] = USB_RX_BUFF[13];
 
 						SAVING_TIME_POS++;
-						HAL_UART_Transmit(&huart2, UART_RESPONSE_OK, sizeof(UART_RESPONSE_OK), 100);
+						CDC_Transmit_FS(UART_RESPONSE_OK, sizeof(UART_RESPONSE_OK));
 					}
 				}
 
 			}
 
-		}else if(UART_BytesReceived == 4)
+		}else if(UART_SET_TIME == 1)
 		{
-			  if(UART_CpltBuffer[0] == 'A' && UART_CpltBuffer[1] == 'T' && UART_CpltBuffer[2] == '\r' && UART_CpltBuffer[3] == '\n')
+			/*GET TIME HERE*/
+		}else if(USB_RX_BYTES_RECEIVED == 4)
+		{
+			  if(USB_RX_BUFF[0] == 'A' && USB_RX_BUFF[1] == 'T' && USB_RX_BUFF[2] == '\r' && USB_RX_BUFF[3] == '\n')
 			  {
-				HAL_UART_Transmit(&huart2, UART_RESPONSE_OK, sizeof(UART_RESPONSE_OK), 100);
+				  CDC_Transmit_FS(UART_RESPONSE_OK, sizeof(UART_RESPONSE_OK));
 			  }
-		}else if(UART_BytesReceived > 4 && UART_CpltBuffer[0] == 'A' && UART_CpltBuffer[1] == 'T' && UART_CpltBuffer[2] == '+')
+		}else if(USB_RX_BYTES_RECEIVED > 4 && USB_RX_BUFF[0] == 'A' && USB_RX_BUFF[1] == 'T' && USB_RX_BUFF[2] == '+')
 		  	  {
-			  	  if(UART_BytesReceived == UART_SENTENCE_HEAD_BYTES+UART_SENTENCE_TAIL_BYTES+(uint8_t)sizeof(UART_GET_IR_SENTENCE))
+			  	  if(USB_RX_BYTES_RECEIVED == UART_SENTENCE_HEAD_BYTES+UART_SENTENCE_TAIL_BYTES+(uint8_t)sizeof(UART_GET_IR_SENTENCE))
 			  	  {
 					  uint8_t UART_GET_IR_FLAG = 1;
 					  for(int i = 0; i<sizeof(UART_GET_IR_SENTENCE); i++)
-						  if(UART_CpltBuffer[i+UART_SENTENCE_HEAD_BYTES] !=  UART_GET_IR_SENTENCE[i])
+						  if(USB_RX_BUFF[i+UART_SENTENCE_HEAD_BYTES] !=  UART_GET_IR_SENTENCE[i])
 							  UART_GET_IR_FLAG = 0;
 					  GET_IR_FLAG = UART_GET_IR_FLAG;
 
-					  HAL_UART_Transmit(&huart2, UART_GET_IR_RESPONSE, sizeof(UART_GET_IR_RESPONSE), 100);
+					  CDC_Transmit_FS(UART_GET_IR_RESPONSE, sizeof(UART_GET_IR_RESPONSE));
 			  	  }
-			  	  if(UART_BytesReceived == UART_SENTENCE_HEAD_BYTES+UART_SENTENCE_TAIL_BYTES+(uint8_t)sizeof(UART_ROUTINES_READ_SENTENCE))
+			  	  if(USB_RX_BYTES_RECEIVED == UART_SENTENCE_HEAD_BYTES+UART_SENTENCE_TAIL_BYTES+(uint8_t)sizeof(UART_ROUTINES_READ_SENTENCE))
 			  	  {
 					  uint8_t UART_ROUTINES_READ_FLAG = 1;
 					  for(int i = 0; i<sizeof(UART_ROUTINES_READ_SENTENCE); i++)
-						  if(UART_CpltBuffer[i+UART_SENTENCE_HEAD_BYTES] !=  UART_ROUTINES_READ_SENTENCE[i])
+						  if(USB_RX_BUFF[i+UART_SENTENCE_HEAD_BYTES] !=  UART_ROUTINES_READ_SENTENCE[i])
 							  UART_ROUTINES_READ_FLAG = 0;
 					  if(UART_ROUTINES_READ_FLAG == 1)
 						  SendRoutinesOverUart();
 			  	  }
-			  	  if(UART_BytesReceived == UART_SENTENCE_HEAD_BYTES+UART_SENTENCE_TAIL_BYTES+(uint8_t)sizeof(UART_ROUTINES_WRITE_SENTENCE))
+			  	  if(USB_RX_BYTES_RECEIVED == UART_SENTENCE_HEAD_BYTES+UART_SENTENCE_TAIL_BYTES+(uint8_t)sizeof(UART_ROUTINES_WRITE_SENTENCE))
 			  	  {
 					  uint8_t UART_ROUTINES_WRITE_FLAG = 1;
 					  for(int i = 0; i<sizeof(UART_ROUTINES_WRITE_SENTENCE); i++)
-						  if(UART_CpltBuffer[i+UART_SENTENCE_HEAD_BYTES] !=  UART_ROUTINES_WRITE_SENTENCE[i])
+						  if(USB_RX_BUFF[i+UART_SENTENCE_HEAD_BYTES] !=  UART_ROUTINES_WRITE_SENTENCE[i])
 							  UART_ROUTINES_WRITE_FLAG = 0;
 					  ROUTINES_WRITE_FLAG = UART_ROUTINES_WRITE_FLAG;
 					  if(UART_ROUTINES_WRITE_FLAG == 1)
-						  HAL_UART_Transmit(&huart2, UART_ROUTINES_WRITE_RESPONSE, sizeof(UART_ROUTINES_WRITE_RESPONSE), 100);
+						  CDC_Transmit_FS(UART_ROUTINES_WRITE_RESPONSE, sizeof(UART_ROUTINES_WRITE_RESPONSE));
 			  	  }
-			  	  if(UART_BytesReceived == UART_SENTENCE_HEAD_BYTES+UART_SENTENCE_TAIL_BYTES+(uint8_t)sizeof(UART_ROUTINES_SAVE_SENTENCE))
+			  	  if(USB_RX_BYTES_RECEIVED == UART_SENTENCE_HEAD_BYTES+UART_SENTENCE_TAIL_BYTES+(uint8_t)sizeof(UART_ROUTINES_SAVE_SENTENCE))
 			  	  {
 			  		uint8_t UART_ROUTINES_SAVE_FLAG = 1;
 			  		for(int i = 0; i<sizeof(UART_ROUTINES_SAVE_SENTENCE); i++)
-			  			if(UART_CpltBuffer[i+UART_SENTENCE_HEAD_BYTES] !=  UART_ROUTINES_SAVE_SENTENCE[i])
+			  			if(USB_RX_BUFF[i+UART_SENTENCE_HEAD_BYTES] !=  UART_ROUTINES_SAVE_SENTENCE[i])
 			  				UART_ROUTINES_SAVE_FLAG = 0;
 			  		if(UART_ROUTINES_SAVE_FLAG == 1)
 			  			{
 			  				saveMem();
-			  				HAL_UART_Transmit(&huart2, UART_RESPONSE_OK, sizeof(UART_RESPONSE_OK), 100);
+			  				CDC_Transmit_FS(UART_RESPONSE_OK, sizeof(UART_RESPONSE_OK));
 			  			}
-
-
 			  	  }
-			  	  if(UART_BytesReceived == UART_SENTENCE_HEAD_BYTES+UART_SENTENCE_TAIL_BYTES+(uint8_t)sizeof(UART_ROUTINES_PURGE_SAVED_SENTENCE))
+			  	  if(USB_RX_BYTES_RECEIVED == UART_SENTENCE_HEAD_BYTES+UART_SENTENCE_TAIL_BYTES+(uint8_t)sizeof(UART_ROUTINES_PURGE_SAVED_SENTENCE))
 			  	  {
 			  		uint8_t UART_ROUTINES_PURGE_SAVED_FLAG = 1;
 					for(int i = 0; i<sizeof(UART_ROUTINES_PURGE_SAVED_SENTENCE); i++)
-						if(UART_CpltBuffer[i+UART_SENTENCE_HEAD_BYTES] !=  UART_ROUTINES_PURGE_SAVED_SENTENCE[i])
+						if(USB_RX_BUFF[i+UART_SENTENCE_HEAD_BYTES] !=  UART_ROUTINES_PURGE_SAVED_SENTENCE[i])
 							UART_ROUTINES_PURGE_SAVED_FLAG = 0;
 					if(UART_ROUTINES_PURGE_SAVED_FLAG == 1)
 					{
 						purgeSaved(2000);
 						readMem();
-						HAL_UART_Transmit(&huart2, UART_RESPONSE_OK, sizeof(UART_RESPONSE_OK), 100);
+						CDC_Transmit_FS(UART_RESPONSE_OK, sizeof(UART_RESPONSE_OK));
 					}
 			  	  }
+			  	  if(USB_RX_BYTES_RECEIVED == UART_SENTENCE_HEAD_BYTES+UART_SENTENCE_TAIL_BYTES+(uint8_t)sizeof(UART_SET_TIME))
+			  	  {
+			  		  SET_TIME_FLAG = 1;
+			  		  for(int i = 0; i<sizeof(UART_SET_TIME); i++)
+			  			  if(USB_RX_BUFF[i+UART_SENTENCE_HEAD_BYTES] !=  UART_SET_TIME[i])
+			  				SET_TIME_FLAG = 0;
+			  		  if(SET_TIME_FLAG == 1)
+			  			  CDC_Transmit_FS(UART_SET_TIME_RESPONSE, sizeof(UART_SET_TIME_RESPONSE));
+			  	  }
 		  	  }
-		  UART_BytesReceived = 0;
+		  USB_RX_BYTES_RECEIVED = 0;
 	}
 }
+//void UartCheckReceived()
+//{
+//	if(UART_BytesReceived > 0)
+//	{
+//		if(ROUTINES_WRITE_FLAG == 1)
+//		{
+//			if(UART_BytesReceived >= 3 && UART_CpltBuffer[0] == 'E' && UART_CpltBuffer[1] == 'N' && UART_CpltBuffer[2] == 'D' )
+//			{
+//				HAL_UART_Transmit(&huart2, UART_RESPONSE_END, sizeof(UART_RESPONSE_END), 100);
+//				ROUTINES_WRITE_FLAG = 0;
+//				SAVING_IR_POS = 0;
+//				SAVING_TIME_POS = 0;
+//
+//			}else if(UART_BytesReceived >= 14 && UART_CpltBuffer[0] == 'S' && UART_CpltBuffer[1] == 'V' && UART_CpltBuffer[2] == '+'){
+//
+//				if(UART_BytesReceived >= 15 && UART_CpltBuffer[3] == 'I' && UART_CpltBuffer[4] == 'R')
+//				{
+//					if(SAVING_IR_POS < MAX_IR_CODES)
+//					{
+//						//IR ADDR
+//						IR_CODES_FLAGS[SAVING_IR_POS][0] = UART_CpltBuffer[5];
+//						//IR COMMAND
+//						IR_CODES_FLAGS[SAVING_IR_POS][1] = UART_CpltBuffer[6];
+//						//ACTIVE STRIPS
+//						IR_CODES_MACROS[SAVING_IR_POS][0] = UART_CpltBuffer[8];
+//						IR_CODES_MACROS[SAVING_IR_POS][1] = UART_CpltBuffer[9];
+//						//EFFECT
+//						IR_CODES_MACROS[SAVING_IR_POS][2] = UART_CpltBuffer[11];
+//						IR_CODES_MACROS[SAVING_IR_POS][3] = UART_CpltBuffer[12];
+//						IR_CODES_MACROS[SAVING_IR_POS][4] = UART_CpltBuffer[13];
+//						IR_CODES_MACROS[SAVING_IR_POS][5] = UART_CpltBuffer[14];
+//
+//						SAVING_IR_POS++;
+//						HAL_UART_Transmit(&huart2, UART_RESPONSE_OK, sizeof(UART_RESPONSE_OK), 100);
+//					}
+//				} else if(UART_CpltBuffer[3] == 'E' && UART_CpltBuffer[4] == 'L')
+//				{
+//					if(UART_CpltBuffer[5] < MAX_ELE_INPUTS)
+//					{
+//						//ACTIVE STRIPS
+//						ELE_INPUT_MACROS[UART_CpltBuffer[5]][0] = UART_CpltBuffer[7];
+//						ELE_INPUT_MACROS[UART_CpltBuffer[5]][1] = UART_CpltBuffer[8];
+//						//EFFECT
+//						ELE_INPUT_MACROS[UART_CpltBuffer[5]][2] = UART_CpltBuffer[10];
+//						ELE_INPUT_MACROS[UART_CpltBuffer[5]][3] = UART_CpltBuffer[11];
+//						ELE_INPUT_MACROS[UART_CpltBuffer[5]][4] = UART_CpltBuffer[12];
+//						ELE_INPUT_MACROS[UART_CpltBuffer[5]][5] = UART_CpltBuffer[13];
+//						HAL_UART_Transmit(&huart2, UART_RESPONSE_OK, sizeof(UART_RESPONSE_OK), 100);
+//					}
+//				} else if(UART_BytesReceived >= 17 && UART_CpltBuffer[3] == 'T' && UART_CpltBuffer[4] == 'M')
+//				{
+//					if(SAVING_TIME_POS < MAX_TIME_MACROS)
+//					{
+//						//START TIME
+//						TIME_FLAGS[SAVING_TIME_POS][0] = UART_CpltBuffer[5];
+//						TIME_FLAGS[SAVING_TIME_POS][1] = UART_CpltBuffer[6];
+//						//FOR TIME (TWO 8BITS = 1 16BIT)
+//						TIME_FLAGS[SAVING_TIME_POS][2] = UART_CpltBuffer[7];
+//						TIME_FLAGS[SAVING_TIME_POS][3] = UART_CpltBuffer[8];
+//						//ACTIVE STRIPS
+//						TIME_MACROS[SAVING_TIME_POS][0] = UART_CpltBuffer[10];
+//						TIME_MACROS[SAVING_TIME_POS][1] = UART_CpltBuffer[11];
+//						//EFFECT
+//						TIME_MACROS[SAVING_TIME_POS][0] = UART_CpltBuffer[13];
+//						TIME_MACROS[SAVING_TIME_POS][1] = UART_CpltBuffer[13];
+//						TIME_MACROS[SAVING_TIME_POS][2] = UART_CpltBuffer[13];
+//						TIME_MACROS[SAVING_TIME_POS][3] = UART_CpltBuffer[13];
+//
+//						SAVING_TIME_POS++;
+//						HAL_UART_Transmit(&huart2, UART_RESPONSE_OK, sizeof(UART_RESPONSE_OK), 100);
+//					}
+//				}
+//
+//			}
+//
+//		}else if(UART_BytesReceived == 4)
+//		{
+//			  if(UART_CpltBuffer[0] == 'A' && UART_CpltBuffer[1] == 'T' && UART_CpltBuffer[2] == '\r' && UART_CpltBuffer[3] == '\n')
+//			  {
+//				HAL_UART_Transmit(&huart2, UART_RESPONSE_OK, sizeof(UART_RESPONSE_OK), 100);
+//			  }
+//		}else if(UART_BytesReceived > 4 && UART_CpltBuffer[0] == 'A' && UART_CpltBuffer[1] == 'T' && UART_CpltBuffer[2] == '+')
+//		  	  {
+//			  	  if(UART_BytesReceived == UART_SENTENCE_HEAD_BYTES+UART_SENTENCE_TAIL_BYTES+(uint8_t)sizeof(UART_GET_IR_SENTENCE))
+//			  	  {
+//					  uint8_t UART_GET_IR_FLAG = 1;
+//					  for(int i = 0; i<sizeof(UART_GET_IR_SENTENCE); i++)
+//						  if(UART_CpltBuffer[i+UART_SENTENCE_HEAD_BYTES] !=  UART_GET_IR_SENTENCE[i])
+//							  UART_GET_IR_FLAG = 0;
+//					  GET_IR_FLAG = UART_GET_IR_FLAG;
+//
+//					  HAL_UART_Transmit(&huart2, UART_GET_IR_RESPONSE, sizeof(UART_GET_IR_RESPONSE), 100);
+//			  	  }
+//			  	  if(UART_BytesReceived == UART_SENTENCE_HEAD_BYTES+UART_SENTENCE_TAIL_BYTES+(uint8_t)sizeof(UART_ROUTINES_READ_SENTENCE))
+//			  	  {
+//					  uint8_t UART_ROUTINES_READ_FLAG = 1;
+//					  for(int i = 0; i<sizeof(UART_ROUTINES_READ_SENTENCE); i++)
+//						  if(UART_CpltBuffer[i+UART_SENTENCE_HEAD_BYTES] !=  UART_ROUTINES_READ_SENTENCE[i])
+//							  UART_ROUTINES_READ_FLAG = 0;
+//					  if(UART_ROUTINES_READ_FLAG == 1)
+//						  SendRoutinesOverUart();
+//			  	  }
+//			  	  if(UART_BytesReceived == UART_SENTENCE_HEAD_BYTES+UART_SENTENCE_TAIL_BYTES+(uint8_t)sizeof(UART_ROUTINES_WRITE_SENTENCE))
+//			  	  {
+//					  uint8_t UART_ROUTINES_WRITE_FLAG = 1;
+//					  for(int i = 0; i<sizeof(UART_ROUTINES_WRITE_SENTENCE); i++)
+//						  if(UART_CpltBuffer[i+UART_SENTENCE_HEAD_BYTES] !=  UART_ROUTINES_WRITE_SENTENCE[i])
+//							  UART_ROUTINES_WRITE_FLAG = 0;
+//					  ROUTINES_WRITE_FLAG = UART_ROUTINES_WRITE_FLAG;
+//					  if(UART_ROUTINES_WRITE_FLAG == 1)
+//						  HAL_UART_Transmit(&huart2, UART_ROUTINES_WRITE_RESPONSE, sizeof(UART_ROUTINES_WRITE_RESPONSE), 100);
+//			  	  }
+//			  	  if(UART_BytesReceived == UART_SENTENCE_HEAD_BYTES+UART_SENTENCE_TAIL_BYTES+(uint8_t)sizeof(UART_ROUTINES_SAVE_SENTENCE))
+//			  	  {
+//			  		uint8_t UART_ROUTINES_SAVE_FLAG = 1;
+//			  		for(int i = 0; i<sizeof(UART_ROUTINES_SAVE_SENTENCE); i++)
+//			  			if(UART_CpltBuffer[i+UART_SENTENCE_HEAD_BYTES] !=  UART_ROUTINES_SAVE_SENTENCE[i])
+//			  				UART_ROUTINES_SAVE_FLAG = 0;
+//			  		if(UART_ROUTINES_SAVE_FLAG == 1)
+//			  			{
+//			  				saveMem();
+//			  				HAL_UART_Transmit(&huart2, UART_RESPONSE_OK, sizeof(UART_RESPONSE_OK), 100);
+//			  			}
+//
+//
+//			  	  }
+//			  	  if(UART_BytesReceived == UART_SENTENCE_HEAD_BYTES+UART_SENTENCE_TAIL_BYTES+(uint8_t)sizeof(UART_ROUTINES_PURGE_SAVED_SENTENCE))
+//			  	  {
+//			  		uint8_t UART_ROUTINES_PURGE_SAVED_FLAG = 1;
+//					for(int i = 0; i<sizeof(UART_ROUTINES_PURGE_SAVED_SENTENCE); i++)
+//						if(UART_CpltBuffer[i+UART_SENTENCE_HEAD_BYTES] !=  UART_ROUTINES_PURGE_SAVED_SENTENCE[i])
+//							UART_ROUTINES_PURGE_SAVED_FLAG = 0;
+//					if(UART_ROUTINES_PURGE_SAVED_FLAG == 1)
+//					{
+//						purgeSaved(2000);
+//						readMem();
+//						HAL_UART_Transmit(&huart2, UART_RESPONSE_OK, sizeof(UART_RESPONSE_OK), 100);
+//					}
+//			  	  }
+//		  	  }
+//		  UART_BytesReceived = 0;
+//	}
+//}
 void irCallback(uint16_t addr, uint16_t comm)
 {
 	if(GET_IR_FLAG)
@@ -297,7 +471,27 @@ void irCallback(uint16_t addr, uint16_t comm)
 		sprintf(irAsci, "ADR: %d, COM: %d", (int)addr, (int)comm);
 		HAL_UART_Transmit(&huart2, (uint8_t *)irAsci, strlen(irAsci), 100);
 		GET_IR_FLAG = 0;
+	}else
+	{
+		for(uint8_t i = 0; i < MAX_IR_CODES; i++)
+		{
+			if(IR_CODES_FLAGS[i][0] == addr && IR_CODES_FLAGS[i][1] == comm)
+			{
+				if(ACTIVE_EFFECT_NB == i && ACTIVE_EFFECT_TYPE == 2)
+				{
+					ACTIVE_EFFECT_NB = 0;
+					ACTIVE_EFFECT_TYPE = 0;
+				}else
+				{
+					ACTIVE_EFFECT_NB = i;
+					ACTIVE_EFFECT_TYPE = 2;
+				}
+
+			}
+		}
 	}
+
+
 }
 /* USER CODE END PFP */
 
@@ -344,6 +538,7 @@ int main(void)
   MX_TIM1_Init();
   MX_TIM3_Init();
   MX_USART2_UART_Init();
+  MX_USB_DEVICE_Init();
   /* USER CODE BEGIN 2 */
 
 //  irSetup(&htim3, &huart1);
@@ -372,12 +567,17 @@ int main(void)
 	}
   ws2812b_init();
 
-  ACTIVE_EFFECT_TYPE = 1;
-  ACTIVE_EFFECT_NB = 1;
-  ELE_INPUT_MACROS[ACTIVE_EFFECT_NB][0] = 0xFF;
-  ELE_INPUT_MACROS[ACTIVE_EFFECT_NB][1] = 0xFF;
-  ELE_INPUT_MACROS[ACTIVE_EFFECT_NB][2] = 1;
-  ELE_INPUT_MACROS[ACTIVE_EFFECT_NB][3] = 40;
+
+  ELE_INPUT_MACROS[1][0] = 0xFF;
+  ELE_INPUT_MACROS[1][1] = 0xFF;
+  ELE_INPUT_MACROS[1][2] = 1;
+  ELE_INPUT_MACROS[1][3] = 40;
+  IR_CODES_FLAGS[1][0] = 48;
+  IR_CODES_FLAGS[1][1] = 64;
+  IR_CODES_MACROS[1][0] = 0xFF;
+  IR_CODES_MACROS[1][1] = 0xFF;
+  IR_CODES_MACROS[1][2] = 1;
+  IR_CODES_MACROS[1][3] = 40;
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -413,12 +613,11 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
-  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
-  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
-  RCC_OscInitStruct.PLL.PLLM = 8;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
+  RCC_OscInitStruct.PLL.PLLM = 4;
   RCC_OscInitStruct.PLL.PLLN = 168;
   RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
   RCC_OscInitStruct.PLL.PLLQ = 7;
@@ -602,12 +801,25 @@ static void MX_DMA_Init(void)
   */
 static void MX_GPIO_Init(void)
 {
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
 /* USER CODE BEGIN MX_GPIO_Init_1 */
 /* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
+  __HAL_RCC_GPIOH_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOD_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
+
+  /*Configure GPIO pin : PA0 */
+  GPIO_InitStruct.Pin = GPIO_PIN_0;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI0_IRQn);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */

@@ -25,13 +25,16 @@ void effectsLoop()
 	{
 		//HANDLE ELE
 		uint16_t strips;
+		case 0:
+			setAllBlack();
 		case 1:
 			strips = (ELE_INPUT_MACROS[ACTIVE_EFFECT_NB][1]<<8) | ELE_INPUT_MACROS[ACTIVE_EFFECT_NB][0];
 			handleEffects(strips, &ELE_INPUT_MACROS[0][0], ACTIVE_EFFECT_NB, BYTES_PER_EFFECT);
 		break;
 		//HANDLE IR
 		case 2:
-
+			strips = (IR_CODES_MACROS[ACTIVE_EFFECT_NB][1]<<8) | IR_CODES_MACROS[ACTIVE_EFFECT_NB][0];
+			handleEffects(strips, &IR_CODES_MACROS[0][0], ACTIVE_EFFECT_NB, BYTES_PER_EFFECT);
 		break;
 		//HANDLE TIME
 		case 3:

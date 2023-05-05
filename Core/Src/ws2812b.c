@@ -477,7 +477,7 @@ static void ws2812b_set_pixel(uint8_t row, uint16_t column, uint8_t red, uint8_t
 	uint32_t invBlue = ~blue;
 
 
-#if defined(SETPIX_1)
+
 	uint8_t i;
 	uint32_t calcClearRow = ~((0x01<<row) << 0);
 	for (i = 0; i < 8; i++)
@@ -493,140 +493,7 @@ static void ws2812b_set_pixel(uint8_t row, uint16_t column, uint8_t red, uint8_t
 		ws2812bDmaBitBuffer[(calcCol+8+i)] |= (((((invRed)<<i) & 0x80)>>7)<<(row+0));
 		ws2812bDmaBitBuffer[(calcCol+16+i)] |= (((((invBlue)<<i) & 0x80)>>7)<<(row+0));
 	}
-#elif defined(SETPIX_2)
-	uint8_t i;
-	for (i = 0; i < 8; i++)
-	{
-		// Set or clear the data for the pixel
 
-		if(((invGreen)<<i) & 0x80)
-			varSetBit(ws2812bDmaBitBuffer[(calcCol+i)], row);
-		else
-			varResetBit(ws2812bDmaBitBuffer[(calcCol+i)], row);
-
-		if(((invRed)<<i) & 0x80)
-			varSetBit(ws2812bDmaBitBuffer[(calcCol+8+i)], row);
-		else
-			varResetBit(ws2812bDmaBitBuffer[(calcCol+8+i)], row);
-
-		if(((invBlue)<<i) & 0x80)
-			varSetBit(ws2812bDmaBitBuffer[(calcCol+16+i)], row);
-		else
-			varResetBit(ws2812bDmaBitBuffer[(calcCol+16+i)], row);
-
-	}
-#elif defined(SETPIX_3)
-	ws2812bDmaBitBuffer[(calcCol+0)] |= (((((invGreen)<<0) & 0x80)>>7)<<row);
-	ws2812bDmaBitBuffer[(calcCol+8+0)] |= (((((invRed)<<0) & 0x80)>>7)<<row);
-	ws2812bDmaBitBuffer[(calcCol+16+0)] |= (((((invBlue)<<0) & 0x80)>>7)<<row);
-
-	ws2812bDmaBitBuffer[(calcCol+1)] |= (((((invGreen)<<1) & 0x80)>>7)<<row);
-	ws2812bDmaBitBuffer[(calcCol+8+1)] |= (((((invRed)<<1) & 0x80)>>7)<<row);
-	ws2812bDmaBitBuffer[(calcCol+16+1)] |= (((((invBlue)<<1) & 0x80)>>7)<<row);
-
-	ws2812bDmaBitBuffer[(calcCol+2)] |= (((((invGreen)<<2) & 0x80)>>7)<<row);
-	ws2812bDmaBitBuffer[(calcCol+8+2)] |= (((((invRed)<<2) & 0x80)>>7)<<row);
-	ws2812bDmaBitBuffer[(calcCol+16+2)] |= (((((invBlue)<<2) & 0x80)>>7)<<row);
-
-	ws2812bDmaBitBuffer[(calcCol+3)] |= (((((invGreen)<<3) & 0x80)>>7)<<row);
-	ws2812bDmaBitBuffer[(calcCol+8+3)] |= (((((invRed)<<3) & 0x80)>>7)<<row);
-	ws2812bDmaBitBuffer[(calcCol+16+3)] |= (((((invBlue)<<3) & 0x80)>>7)<<row);
-
-	ws2812bDmaBitBuffer[(calcCol+4)] |= (((((invGreen)<<4) & 0x80)>>7)<<row);
-	ws2812bDmaBitBuffer[(calcCol+8+4)] |= (((((invRed)<<4) & 0x80)>>7)<<row);
-	ws2812bDmaBitBuffer[(calcCol+16+4)] |= (((((invBlue)<<4) & 0x80)>>7)<<row);
-
-	ws2812bDmaBitBuffer[(calcCol+5)] |= (((((invGreen)<<5) & 0x80)>>7)<<row);
-	ws2812bDmaBitBuffer[(calcCol+8+5)] |= (((((invRed)<<5) & 0x80)>>7)<<row);
-	ws2812bDmaBitBuffer[(calcCol+16+5)] |= (((((invBlue)<<5) & 0x80)>>7)<<row);
-
-	ws2812bDmaBitBuffer[(calcCol+6)] |= (((((invGreen)<<6) & 0x80)>>7)<<row);
-	ws2812bDmaBitBuffer[(calcCol+8+6)] |= (((((invRed)<<6) & 0x80)>>7)<<row);
-	ws2812bDmaBitBuffer[(calcCol+16+6)] |= (((((invBlue)<<6) & 0x80)>>7)<<row);
-
-	ws2812bDmaBitBuffer[(calcCol+7)] |= (((((invGreen)<<7) & 0x80)>>7)<<row);
-	ws2812bDmaBitBuffer[(calcCol+8+7)] |= (((((invRed)<<7) & 0x80)>>7)<<row);
-	ws2812bDmaBitBuffer[(calcCol+16+7)] |= (((((invBlue)<<7) & 0x80)>>7)<<row);
-#elif defined(SETPIX_4)
-
-	// Bitband optimizations with pure increments, 5us interrupts
-	uint32_t *bitBand = BITBAND_SRAM(&ws2812bDmaBitBuffer[(calcCol)], row);
-
-	*bitBand =  (invGreen >> 7);
-	bitBand+=16;
-
-	*bitBand = (invGreen >> 6);
-	bitBand+=16;
-
-	*bitBand = (invGreen >> 5);
-	bitBand+=16;
-
-	*bitBand = (invGreen >> 4);
-	bitBand+=16;
-
-	*bitBand = (invGreen >> 3);
-	bitBand+=16;
-
-	*bitBand = (invGreen >> 2);
-	bitBand+=16;
-
-	*bitBand = (invGreen >> 1);
-	bitBand+=16;
-
-	*bitBand = (invGreen >> 0);
-	bitBand+=16;
-
-	// RED
-	*bitBand =  (invRed >> 7);
-	bitBand+=16;
-
-	*bitBand = (invRed >> 6);
-	bitBand+=16;
-
-	*bitBand = (invRed >> 5);
-	bitBand+=16;
-
-	*bitBand = (invRed >> 4);
-	bitBand+=16;
-
-	*bitBand = (invRed >> 3);
-	bitBand+=16;
-
-	*bitBand = (invRed >> 2);
-	bitBand+=16;
-
-	*bitBand = (invRed >> 1);
-	bitBand+=16;
-
-	*bitBand = (invRed >> 0);
-	bitBand+=16;
-
-	// BLUE
-	*bitBand =  (invBlue >> 7);
-	bitBand+=16;
-
-	*bitBand = (invBlue >> 6);
-	bitBand+=16;
-
-	*bitBand = (invBlue >> 5);
-	bitBand+=16;
-
-	*bitBand = (invBlue >> 4);
-	bitBand+=16;
-
-	*bitBand = (invBlue >> 3);
-	bitBand+=16;
-
-	*bitBand = (invBlue >> 2);
-	bitBand+=16;
-
-	*bitBand = (invBlue >> 1);
-	bitBand+=16;
-
-	*bitBand = (invBlue >> 0);
-	bitBand+=16;
-
-#endif
 }
 
 
